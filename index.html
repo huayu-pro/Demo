@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <title>Hands Cat's Cradle - V3 Ultimate Edition</title>
+    
+    <!-- MediaPipe AI Models -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Styles & Icons -->
+    <link rel="stylesheet" href="style.css?v=3.0.4">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts for Sans (Outfit / Noto Sans) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- LXGW WenKai for Ink Mode Typography -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-lite-webfont@1.1.0/style.css" />
+</head>
+<body class="cyber-mode">
+    <!-- Inline FOUC Defender -->
+    <script>
+        (function(){
+            try {
+                var state = localStorage.getItem('cats_cradle_v3_state');
+                if (state) {
+                    var pState = JSON.parse(state);
+                    if (pState.bgMode === 'xuan-paper') {
+                        document.body.classList.remove('cyber-mode');
+                        document.body.classList.add('ink-mode');
+                    }
+                }
+            } catch(e){}
+        })();
+    </script>
+    <div id="app-container">
+        
+        <!-- Video Source (Hidden) -->
+        <video id="webcam" autoplay playsinline style="display: none;"></video>
+        
+        <!-- Output Canvas for Rendering -->
+        <div class="canvas-wrapper">
+            <div class="vignette-overlay"></div>
+            <canvas id="output-canvas"></canvas>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loader-overlay">
+            <!-- Cyber Loader -->
+            <div class="cyber-loader">
+                <div class="loader-spinner"></div>
+                <h2 class="typewriter-text"></h2>
+                <p>正在加载全息手部追踪模型</p>
+            </div>
+            <!-- Ink Loader -->
+            <div class="ink-loader">
+                <div class="ink-drop-anim"></div>
+                <h2>执笔入画，泼墨成山</h2>
+            </div>
+        </div>
+
+        <!-- Start Guide Overlay -->
+        <div id="guide-overlay">
+            <div class="guide-box">
+                <i class="fa-regular fa-hand-spock pulse-icon"></i>
+                <h3>请将双手置于镜头前</h3>
+                <p>系统已就绪，等待捕捉手势...</p>
+            </div>
+        </div>
+
+        <!-- Signature / Seal for Ink Mode -->
+        <div id="ink-signature" class="ink-signature hidden">
+            <div class="signature-text">墨客</div>
+            <div class="signature-seal">印</div>
+        </div>
+
+        <!-- Success Banner -->
+        <div id="success-banner" class="hidden">
+            <h1 class="glitch-text" data-text="PERFECT MATCH">PERFECT MATCH</h1>
+            <p>形状完美匹配！开启下一关...</p>
+        </div>
+
+        <!-- Shape Challenge HUD -->
+        <div id="challenge-hud" class="hidden">
+            <div class="hud-box">
+                <div class="hud-title">关卡匹配进度</div>
+                <div class="hud-score" id="challenge-match-percent">0%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" id="challenge-progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Tips Widget -->
+        <div class="quick-tips-panel">
+            <i class="fa-solid fa-circle-info"></i>
+            <span id="quick-tips-text">V3.0: 划动手指拨弦；开启“手势绘制”后捏合双指画线；剪刀手可切断一切！</span>
+        </div>
+        <!-- Countdown Overlay -->
+        <div id="countdown-overlay" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:900; align-items:center; justify-content:center; flex-direction:column; color:#fff; pointer-events:none;">
+            <div id="countdown-text" style="font-size:180px; font-weight:bold; font-family:'Roboto Mono', sans-serif; text-shadow: 0 0 30px #00ffff; color: #00ffff;">3</div>
+            <div style="font-size:24px; margin-top:20px; letter-spacing:8px; color:rgba(0,255,255,0.7);">PREPARING CAPTURE</div>
+        </div>
+
+        <!-- Recording HUD -->
+        <div id="recording-hud" class="hidden">
+            <div class="recording-indicator">
+                <span class="red-dot"></span> REC <span id="recording-time">00:00</span>
+            </div>
+        </div>
+
+        <!-- Main Settings Sidebar (Tabbed) -->
+        <aside class="sidebar" id="settings-sidebar">
+                        <div class="sidebar-header">
+                <h3><i class="fa-solid fa-cube"></i> <span id="ui-panel-title">全息控制台</span> V4</h3>
+                <button id="close-sidebar-btn" class="icon-btn" title="隐藏控制台">
+                    <i class="fa-solid fa-chevron-right cyber-icon"></i>
+                    <span class="ink-icon" style="display:none; font-family:'LXGW WenKai Mono', serif;">關</span>
+                </button>
+            </div>
+            
+            <div class="art-style-toggle" style="display:flex; padding: 10px; gap: 8px; border-bottom: 1px solid var(--border-color);">
+                <button id="style-cyber" class="secondary-btn active" style="flex:1;"><i class="fa-solid fa-microchip"></i> 赛博</button>
+                <button id="style-ink" class="secondary-btn" style="flex:1;"><i class="fa-solid fa-brush"></i> 水墨</button>
+            </div>
+            
+            <div class="sidebar-content drawer-layout">
+                
+                <!-- 1. Modes & Interaction -->
+                <details class="drawer-group" open>
+                    <summary><h4><i class="fa-solid fa-gamepad"></i> 1. 运行模式与交互 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row" style="flex-direction: row; gap: 8px;">
+                            <button class="secondary-btn active" id="mode-freeplay" style="flex: 1;">自由沙盒</button>
+                            <button class="secondary-btn" id="mode-challenge" style="flex: 1;">图形挑战</button>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-pure-mode">纯净专注模式 (仅外框填充)</label>
+                            <input type="checkbox" id="toggle-pure-mode">
+                        </div>
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-draw-mode">捏合绘制直线模式</label>
+                            <input type="checkbox" id="toggle-draw-mode">
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-fill-loops">闭合图形自动填充</label>
+                            <input type="checkbox" id="toggle-fill-loops" checked>
+                        </div>
+                        <div id="loop-fill-settings" class="loop-fill-settings">
+                            <div class="setting-row color-picker-row">
+                                <label for="color-fill">填充颜色</label>
+                                <div class="color-swatch" style="--swatch-color: #00ffff;"><input type="color" id="color-fill" value="#00ffff" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-fill-opacity">填充透明度</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-fill-opacity" min="0.0" max="1.0" value="0.30" step="0.05">
+                                    <span class="val-display">0.30</span>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="btn-clear-drawings" class="secondary-btn" style="margin-top: 8px;"><i class="fa-solid fa-eraser"></i> 清除绘制画布</button>
+                        
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-convex-polygon">开启多指凸多边形</label>
+                            <input type="checkbox" id="toggle-convex-polygon">
+                        </div>
+                        <div id="convex-polygon-settings" class="loop-fill-settings" style="display:none; flex-direction:column; gap:8px;">
+                            <div class="setting-row color-picker-row">
+                                <label for="color-convex-fill">多边形填充颜色</label>
+                                <div class="color-swatch" style="--swatch-color: #ff00ff;"><input type="color" id="color-convex-fill" value="#ff00ff" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">识别手指选择：</div>
+                            <div class="setting-row" style="gap: 10px; display: flex; flex-direction: column;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="finger-thumb">👍 大拇指</label><input type="checkbox" id="finger-thumb" checked>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="finger-index">☝️ 食指</label><input type="checkbox" id="finger-index" checked>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="finger-middle">🖕 中指</label><input type="checkbox" id="finger-middle" checked>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="finger-ring">💍 无名指</label><input type="checkbox" id="finger-ring" checked>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <label for="finger-pinky">🤙 小指</label><input type="checkbox" id="finger-pinky" checked>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 2. Aesthetics & Styles -->
+                <details class="drawer-group">
+                    <summary><h4><i class="fa-solid fa-palette"></i> 2. 视觉美学 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row">
+                            <label for="bg-mode">背景模式</label>
+                            <select id="bg-mode">
+                                <option value="black">纯黑空间 (Black)</option>
+                                <option value="webcam" selected>真实镜头 (Webcam)</option>
+                                <option value="custom">自定义背景 (Custom)</option>
+                                <option value="color">自定义色彩 (Color)</option>
+                                <option value="xuan-paper">宣纸 (Xuan Paper)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row hidden" id="bg-upload-row" style="margin-top: 8px;">
+                            <label for="custom-bg-upload" class="file-upload-btn">
+                                <i class="fa-regular fa-image"></i> 上传自定义背景
+                            </label>
+                            <input type="file" id="custom-bg-upload" accept="image/*" style="display: none;">
+                            <span id="custom-bg-filename" class="upload-filename">未导入</span>
+                        </div>
+                        <div class="setting-row hidden" id="bg-color-row" style="margin-top: 8px;">
+                            <div class="setting-row color-picker-row">
+                                <label for="color-canvas-bg">背景颜色</label>
+                                <div class="color-swatch" style="--swatch-color: #050608;"><input type="color" id="color-canvas-bg" value="#050608" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="string-color-theme">主题配色</label>
+                            <select id="string-color-theme">
+                                <option value="cyan-pink">赛博霓虹 (青/粉)</option>
+                                <option value="aurora">极光幻境 (紫/绿)</option>
+                                <option value="lava">熔岩烈火 (红/橙)</option>
+                                <option value="ocean">深海秘境 (蓝/青)</option>
+                                <option value="rainbow">七彩炫丽 (渐变)</option>
+                                <option value="custom">自定义色彩</option>
+                            </select>
+                        </div>
+                        <div id="custom-color-pickers" class="custom-color-pickers hidden">
+                            <div class="setting-row color-picker-row">
+                                <label for="color-string">绳子线条</label>
+                                <div class="color-swatch" style="--swatch-color: #ff007f;"><input type="color" id="color-string" value="#ff007f" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                            <div class="setting-row color-picker-row">
+                                <label for="color-joints">手部节点</label>
+                                <div class="color-swatch" style="--swatch-color: #00ffff;"><input type="color" id="color-joints" value="#00ffff" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="setting-row">
+                            <label for="select-string-style">线条样式</label>
+                            <select id="select-string-style">
+                                <option value="solid" selected>实线 (Solid)</option>
+                                <option value="dashed">虚线 (Dashed)</option>
+                                <option value="dotted">点线 (Dotted)</option>
+                                <option value="brush">水墨毛笔 (Brush)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-string-width">弦线粗细</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-string-width" min="1" max="8" value="3" step="0.5">
+                                <span class="val-display">3</span>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-glow-strength">全局发光强度</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-glow-strength" min="0" max="50" value="15">
+                                <span class="val-display">15</span>
+                            </div>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-skeleton">显示手指骨骼线条</label>
+                            <input type="checkbox" id="toggle-skeleton" checked>
+                        </div>
+                        
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-finger-ripple">开启指尖移动涟漪</label>
+                            <input type="checkbox" id="toggle-finger-ripple">
+                        </div>
+                        <div id="finger-ripple-settings" class="loop-fill-settings" style="display:none; flex-direction:column; gap:8px;">
+                            <div class="setting-row color-picker-row">
+                                <label for="color-finger-ripple">涟漪动效颜色</label>
+                                <div class="color-swatch" style="--swatch-color: #00ffff;"><input type="color" id="color-finger-ripple" value="#00ffff" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-ripple-size">涟漪扩散半径</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-ripple-size" min="10" max="100" value="30">
+                                    <span class="val-display">30</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="pattern-tabs" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; width: 100%;">翻绳矩阵形态：</div>
+                            <button class="pattern-tab active" data-pattern="star"><i class="fa-regular fa-star"></i><span class="label">星</span></button>
+                            <button class="pattern-tab" data-pattern="starry"><i class="fa-solid fa-meteor"></i><span class="label">云</span></button>
+                            <button class="pattern-tab" data-pattern="cradle"><i class="fa-solid fa-bridge"></i><span class="label">桥</span></button>
+                            <button class="pattern-tab" data-pattern="flower"><i class="fa-solid fa-seedling"></i><span class="label">花</span></button>
+                            <button class="pattern-tab" data-pattern="well"><i class="fa-solid fa-border-all"></i><span class="label">井</span></button>
+                            <button class="pattern-tab" data-pattern="constellation"><i class="fa-solid fa-circle-nodes"></i><span class="label">网</span></button>
+                        </div>
+                        
+                        <div class="ink-only-settings" id="ink-calligraphy-settings" style="display: none; margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div class="setting-row">
+                                <label for="select-brush-style">笔锋预设 (Brush Style)</label>
+                                <select id="select-brush-style" style="width:100%; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-primary); padding:6px; border-radius:4px; font-family:var(--font-sans);">
+                                    <option value="kai">楷书 (Kai) - 平稳粗实</option>
+                                    <option value="xing" selected>行书 (Xing) - 连贯灵动</option>
+                                    <option value="cao">草书 (Cao) - 狂草飞白</option>
+                                </select>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-ink-density">墨色浓淡</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-ink-density" min="0.1" max="1.0" step="0.1" value="0.85">
+                                    <span class="val-display">0.85</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="input-signature">名章落款 (最多4字)</label>
+                                <input type="text" id="input-signature" value="墨客" maxlength="4" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:6px; border-radius:4px;">
+                            </div>
+                            <div class="setting-row">
+                                <label for="select-poetry">诗词题跋</label>
+                                <select id="select-poetry">
+                                    <option value="none">无 (None)</option>
+                                    <option value="custom">自定义 (Custom)</option>
+                                    <option value="jiangjinjiu" selected>将进酒 (李白)</option>
+                                    <option value="jingyesi">静夜思 (李白)</option>
+                                </select>
+                            </div>
+                            <div class="setting-row" id="custom-poetry-row" style="display:none;">
+                                <textarea id="input-custom-poetry" rows="3" style="width:100%; background:rgba(0,0,0,0.5); border:1px solid var(--border-color); color:var(--text-primary); padding:6px; border-radius:4px; font-family:var(--font-ink);"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 3. Physics Engine -->
+                <details class="drawer-group">
+                    <summary><h4><i class="fa-solid fa-atom"></i> 3. 物理与力学 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row">
+                            <label for="gravity-engine">重力场类型</label>
+                            <select id="gravity-engine">
+                                <option value="down" selected>地球引力 (Downwards)</option>
+                                <option value="up">反重力 (Upwards)</option>
+                                <option value="zero">太空失重 (Zero-G)</option>
+                                <option value="blackhole">黑洞坍缩 (Black Hole)</option>
+                                <option value="centrifugal">离心排斥 (Centrifugal)</option>
+                                <option value="vortex">漩涡涡流 (Vortex)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-gravity-strength">重力场强度</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-gravity-strength" min="0" max="5.0" value="0.5" step="0.05">
+                                <span class="val-display">0.5</span>
+                            </div>
+                        </div>
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-absolute-straight">绝对直线模式 (无视重力弯曲)</label>
+                            <input type="checkbox" id="toggle-absolute-straight">
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-toughness">线条物理韧性 (Toughness)</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-toughness" min="0" max="20" value="5">
+                                <span class="val-display">5</span>
+                            </div>
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-tension">回缩张力 (Tension)</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-tension" min="0" max="25" value="6">
+                                <span class="val-display">6</span>
+                            </div>
+                        </div>
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-pluck">开启手指拨弦物理碰撞</label>
+                            <input type="checkbox" id="toggle-pluck" checked>
+                        </div>
+                        <div class="setting-row">
+                            <label for="slider-pluck-sensitivity">碰撞灵敏度 (Sensitivity)</label>
+                            <div class="slider-container">
+                                <input type="range" id="slider-pluck-sensitivity" min="0" max="20" value="5">
+                                <span class="val-display">5</span>
+                            </div>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-cut">开启剪刀手无情切割</label>
+                            <input type="checkbox" id="toggle-cut" checked>
+                        </div>
+                        <div class="setting-row toggle-row" style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <label for="toggle-never-break">永不断裂保护 (锁定连接)</label>
+                            <input type="checkbox" id="toggle-never-break">
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-drop-on-lost">失联后线条掉落解体</label>
+                            <input type="checkbox" id="toggle-drop-on-lost" checked>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 4. Particle System -->
+                <details class="drawer-group">
+                    <summary><h4><i class="fa-solid fa-sparkles"></i> 4. 粒子系统特效 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-particles">启用粒子特效</label>
+                            <input type="checkbox" id="toggle-particles" checked>
+                        </div>
+                        <div class="setting-row">
+                            <label for="select-particle-style">粒子特效预设方案</label>
+                            <select id="select-particle-style">
+                                <option value="auto" selected>跟随主题自动 (Auto)</option>
+                                <option value="spark">经典火花 (Spark)</option>
+                                <option value="starry">闪耀星辰 (Starry)</option>
+                                <option value="code">数字代码 (Code)</option>
+                                <option value="petal">浪漫樱花 (Petal)</option>
+                                <option value="leaf">金秋落叶 (Leaf)</option>
+                                <option value="vine">生长藤蔓 (Vine)</option>
+                                <option value="ink">泼墨水墨 (Ink)</option>
+                                <option value="galaxy">螺旋星系 (Galaxy)</option>
+                                <option value="vortex">宇宙漩涡 (Vortex)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label for="select-particle-trajectory">粒子运动轨迹</label>
+                            <select id="select-particle-trajectory">
+                                <option value="explode" selected>向外放射 (Explode)</option>
+                                <option value="spiral">螺旋回旋 (Spiral)</option>
+                                <option value="fountain">火山喷泉 (Fountain)</option>
+                                <option value="drift">微风横漂 (Drift)</option>
+                                <option value="none">零运动轨迹 (None)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label for="select-particle-shape">粒子基础形状</label>
+                            <select id="select-particle-shape">
+                                <option value="circle" selected>圆形 (Circle)</option>
+                                <option value="star">星形 (Star)</option>
+                                <option value="leaf">树叶 (Leaf)</option>
+                                <option value="square">方形 (Square)</option>
+                                <option value="ring">环形 (Ring)</option>
+                            </select>
+                        </div>
+                        <div class="setting-row">
+                            <label for="select-particle-color">粒子颜色类型</label>
+                            <select id="select-particle-color">
+                                <option value="theme" selected>跟随主色 (Theme)</option>
+                                <option value="rainbow">七彩随机 (Rainbow)</option>
+                                <option value="white">纯净白色 (White)</option>
+                                <option value="custom">自定义 (Custom)</option>
+                            </select>
+                        </div>
+                        <div id="particle-custom-color-row" class="setting-row color-picker-row hidden">
+                            <label for="color-particle">自定义粒子颜色</label>
+                            <div class="color-swatch" style="--swatch-color: #00ffff;"><input type="color" id="color-particle" value="#00ffff" onchange="this.parentElement.style.setProperty('--swatch-color', this.value)"></div>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-particle-circle-spread">生成时扩散成完美圆</label>
+                            <input type="checkbox" id="toggle-particle-circle-spread">
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div class="setting-row">
+                                <label for="slider-particle-count">单次生成数量</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-particle-count" min="0" max="30" value="3">
+                                    <span class="val-display">3</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-particle-size">粒子基础大小</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-particle-size" min="0.5" max="15.0" value="3.0" step="0.5">
+                                    <span class="val-display">3.0</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-particle-speed">运动速度</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-particle-speed" min="0.0" max="5.0" value="1.0" step="0.1">
+                                    <span class="val-display">1.0</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-particle-glow">粒子光效强度</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-particle-glow" min="0" max="30" value="0">
+                                    <span class="val-display">0</span>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-particle-lifespan">粒子寿命 (秒)</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-particle-lifespan" min="0.5" max="8.0" value="3.0" step="0.1">
+                                    <span class="val-display">3.0</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 5. Audio Synthesis -->
+                <details class="drawer-group">
+                    <summary><h4><i class="fa-solid fa-music"></i> 5. 全息音场 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-audio">开启拨弦/碰撞音效</label>
+                            <input type="checkbox" id="toggle-audio" checked>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-pad">开启背景和弦声垫 (Pad)</label>
+                            <input type="checkbox" id="toggle-pad" checked>
+                        </div>
+                        <div class="setting-row">
+                            <label for="synth-waveform">合成器主乐器</label>
+                            <select id="synth-waveform">
+                                <optgroup label="东方传统乐器">
+                                    <option value="guzheng" selected>高山古筝 (Guzheng)</option>
+                                    <option value="erhu">二胡 (Erhu)</option>
+                                    <option value="pipa">琵琶 (Pipa)</option>
+                                    <option value="shakuhachi">幽谷尺八 (Shakuhachi)</option>
+                                    <option value="yangqin">扬琴 (Yangqin)</option>
+                                    <option value="suona">唢呐 (Suona)</option>
+                                    <option value="bianzhong">编钟 (Bianzhong)</option>
+                                </optgroup>
+                                <optgroup label="西方古典乐器">
+                                    <option value="piano">钢琴 (Piano)</option>
+                                    <option value="violin">小提琴 (Violin)</option>
+                                    <option value="cello">大提琴 (Cello)</option>
+                                    <option value="harp">竖琴 (Harp)</option>
+                                    <option value="flute">长笛 (Flute)</option>
+                                    <option value="oboe">双簧管 (Oboe)</option>
+                                    <option value="glockenspiel">钟琴风铃 (Glockenspiel)</option>
+                                    <option value="organ">管风琴 (Organ)</option>
+                                </optgroup>
+                                <optgroup label="大自然的声音">
+                                    <option value="birds">空谷鸟鸣 (Valley Birds)</option>
+                                    <option value="rain">细雨微风 (Rain & Wind)</option>
+                                    <option value="ocean">海岸浪潮 (Ocean Waves)</option>
+                                    <option value="thunder">滚滚雷声 (Thunder)</option>
+                                    <option value="stream">潺潺溪流 (Stream)</option>
+                                    <option value="fire">噼啪篝火 (Fire Crackle)</option>
+                                    <option value="crickets">夏夜虫鸣 (Crickets)</option>
+                                </optgroup>
+                                <optgroup label="现代电子合成">
+                                    <option value="cyber_pluck">赛博电音 (Cyber Pluck)</option>
+                                    <option value="fm_bass">FM 低音 (FM Bass)</option>
+                                    <option value="sine">太空纯音 (Sine)</option>
+                                    <option value="triangle">复古暖音 (Triangle)</option>
+                                    <option value="sawtooth">数字锯齿 (Sawtooth)</option>
+                                    <option value="square">8-Bit (Square)</option>
+                                </optgroup>
+                              </select>
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div class="setting-row">
+                                <label for="bgm-upload" class="file-upload-btn" style="width:100%; text-align:center;">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> 导入 BGM (支持多首)
+                                </label>
+                                <input type="file" id="bgm-upload" accept="audio/*" multiple style="display: none;">
+                            </div>
+                            <ul id="bgm-playlist" style="list-style: none; padding: 0; margin: 8px 0; max-height: 100px; overflow-y: auto; background: rgba(0,0,0,0.05); border-radius: 4px;">
+                                <li style="padding: 6px; color: var(--text-secondary); text-align: center; font-size: 12px;">暂无文件，请导入</li>
+                            </ul>
+                            <div class="setting-row" style="flex-direction: row; gap: 8px; margin-top: 8px;">
+                                <button id="btn-play-bgm" class="secondary-btn" disabled><i class="fa-solid fa-play"></i> 播放/下首</button>
+                                <button id="btn-pause-bgm" class="secondary-btn" disabled><i class="fa-solid fa-pause"></i> 暂停</button>
+                            </div>
+                            <div class="setting-row">
+                                <label for="slider-bgm-volume">BGM 音量大小</label>
+                                <div class="slider-container">
+                                    <input type="range" id="slider-bgm-volume" min="0" max="1" value="0.5" step="0.05">
+                                    <span class="val-display">0.5</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+
+                <!-- 5.5 Shortcuts Hint -->
+                <details class="drawer-group shortcut-drawer">
+                    <summary><h4><i class="fa-solid fa-keyboard"></i> 5.5 快捷操作指南 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content shortcut-content">
+                        <ul style="list-style: none; padding: 0; margin: 0; font-size: 11px; color: var(--text-secondary); line-height: 1.6;">
+                            <li><kbd>Space</kbd> : 截图保存至画廊</li>
+                            <li><kbd>R</kbd> : 开始/停止录制视频</li>
+                            <li><kbd>S</kbd> : 切换骨架显示</li>
+                            <li><kbd>C</kbd> : 清空手绘层</li>
+                            <li><kbd>P</kbd> : 切换纯净模式</li>
+                            <li><kbd>M</kbd> : 切换音效开关</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <!-- 6. System Tools -->
+                <details class="drawer-group">
+                    <summary><h4><i class="fa-solid fa-gear"></i> 6. 系统与工具 <i class="fa-solid fa-chevron-down drawer-arrow"></i></h4></summary>
+                    <div class="drawer-content">
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-webcam">显示底层摄像头画面</label>
+                            <input type="checkbox" id="toggle-webcam" checked>
+                        </div>
+                        <div class="setting-row toggle-row">
+                            <label for="toggle-mirror">画面水平镜像反转</label>
+                            <input type="checkbox" id="toggle-mirror" checked>
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <button id="btn-record" class="action-btn"><i class="fa-solid fa-circle-dot"></i> 开始录制视频</button>
+                            <button id="btn-screenshot" class="action-btn"><i class="fa-solid fa-camera-retro"></i> 截取全息快照</button>
+                            <button id="btn-reset" class="secondary-btn btn-danger" style="flex: 1; margin-top: 4px;"><i class="fa-solid fa-arrow-rotate-left"></i> 恢复默认设置</button>
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">自定义预设 (Presets)：</div>
+                            <div class="preset-slots" style="display:flex; flex-direction:column; gap:8px;">
+                                <div class="preset-slot" data-slot="1" style="display:flex; gap:4px;">
+                                    <button class="action-btn load-preset-btn" style="flex:1; justify-content:flex-start; padding-left:12px;">槽位 1: 空</button>
+                                    <button class="action-btn save-preset-btn" style="width:40px; padding:0;" title="保存当前状态"><i class="fa-solid fa-download"></i></button>
+                                    <button class="action-btn delete-preset-btn" style="width:40px; padding:0;" title="删除"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                                <div class="preset-slot" data-slot="2" style="display:flex; gap:4px;">
+                                    <button class="action-btn load-preset-btn" style="flex:1; justify-content:flex-start; padding-left:12px;">槽位 2: 空</button>
+                                    <button class="action-btn save-preset-btn" style="width:40px; padding:0;" title="保存当前状态"><i class="fa-solid fa-download"></i></button>
+                                    <button class="action-btn delete-preset-btn" style="width:40px; padding:0;" title="删除"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                                <div class="preset-slot" data-slot="3" style="display:flex; gap:4px;">
+                                    <button class="action-btn load-preset-btn" style="flex:1; justify-content:flex-start; padding-left:12px;">槽位 3: 空</button>
+                                    <button class="action-btn save-preset-btn" style="width:40px; padding:0;" title="保存当前状态"><i class="fa-solid fa-download"></i></button>
+                                    <button class="action-btn delete-preset-btn" style="width:40px; padding:0;" title="删除"><i class="fa-solid fa-trash"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 8px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                            <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 6px;">截图快照图廊：</div>
+                            <div id="screenshot-gallery" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px;">
+                                <div class="gallery-empty">
+                                    <i class="fa-solid fa-camera" style="margin-bottom: 4px; opacity: 0.5;"></i>
+                                    <div>暂无快照</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </details>
+                
+            </div>
+        </aside>
+
+        <!-- Bottom Ticker Logs -->
+        <div class="bottom-ticker">
+            <div class="ticker-header">
+                <span class="dot red"></span>
+                <span class="dot yellow"></span>
+                <span class="dot green"></span>
+                <span style="margin-left: 8px;">SYS_LOG</span>
+                <span id="fps-display" style="margin-left: 10px; font-weight:bold; color:var(--text-color);">FPS: 60</span>
+            </div>
+            <div class="ticker-content-wrapper">
+                <div id="terminal-body" class="ticker-body"></div>
+            </div>
+        </div>
+
+        <!-- Sidebar Toggle Button -->
+        <button id="toggle-sidebar-btn" title="显示控制台"><i class="fa-solid fa-bars"></i></button>
+    </div>
+
+    <!-- Modular Logic Scripts -->
+    <script src="js/utils.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/physics.js"></script>
+    <script src="js/particles.js"></script>
+    <script src="js/challenge.js"></script>
+    <!-- Main Logic Script -->
+    <script src="app.js?v=3.0.4"></script>
+</body>
+</html>

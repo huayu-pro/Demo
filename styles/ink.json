@@ -1,0 +1,29 @@
+{
+  "id": "ink",
+  "name": "水墨国风",
+  "ui": {
+    "fontFamily": "'LXGW WenKai', serif",
+    "bg": "rgba(245, 236, 215, 0.9)",
+    "accent": "#333333",
+    "panelTitle": "墨客随笔",
+    "textColor": "#1a1a1a",
+    "border": "1px solid rgba(0, 0, 0, 0.1)"
+  },
+  "canvas": {
+    "backgroundMode": "xuan-paper",
+    "backgroundColor": "#f5ecd7",
+    "stringStyle": "brush",
+    "particleStyle": "petal",
+    "particleShape": "circle",
+    "defaultColorTheme": "ink",
+    "glowStrength": 0,
+    "stringWidth": 5,
+    "inkDensity": 0.8
+  },
+  "audio": {
+    "defaultSynth": "guzheng",
+    "enablePad": false,
+    "scaleMode": "pentatonic",
+    "ambient": "bamboo-wind"
+  }
+}

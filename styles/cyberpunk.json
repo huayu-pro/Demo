@@ -1,0 +1,28 @@
+{
+  "id": "cyberpunk",
+  "name": "赛博朋克",
+  "ui": {
+    "fontFamily": "'Outfit', sans-serif",
+    "bg": "rgba(10, 10, 15, 0.85)",
+    "accent": "#00ffff",
+    "panelTitle": "系统日志",
+    "textColor": "#e0e0e0",
+    "border": "1px solid rgba(0, 255, 255, 0.2)"
+  },
+  "canvas": {
+    "backgroundMode": "webcam",
+    "backgroundColor": "#050608",
+    "stringStyle": "glow",
+    "particleStyle": "auto",
+    "particleShape": "circle",
+    "defaultColorTheme": "cyan-pink",
+    "glowStrength": 15,
+    "stringWidth": 3
+  },
+  "audio": {
+    "defaultSynth": "cyber_pluck",
+    "enablePad": true,
+    "scaleMode": "diatonic",
+    "ambient": "none"
+  }
+}
